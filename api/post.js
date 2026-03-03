@@ -1,6 +1,8 @@
 export default async function handler(req, res) {
 
-  // --- CORS ---
+  // =========================
+  // CORS
+  // =========================
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -25,21 +27,16 @@ export default async function handler(req, res) {
 
   try {
 
-    const wallUrl = `https://api.vk.com/method/wall.getById?posts=${owner_id}_${post_id}&access_token=${process.env.VK_TOKEN}&v=5.199`;
+    const wallUrl =
+      `https://api.vk.com/method/wall.getById?posts=${owner_id}_${post_id}` +
+      `&access_token=${process.env.VK_TOKEN}&v=5.199`;
 
     const wallResponse = await fetch(wallUrl);
-
-    if (!wallResponse.ok) {
-      return res.status(wallResponse.status).json({
-        error: "VK API request failed (wall.getById)"
-      });
-    }
-
     const wallData = await wallResponse.json();
 
     if (wallData.error) {
       return res.status(400).json({
-        error: "VK API error",
+        error: "VK API error (wall.getById)",
         details: wallData.error.error_msg
       });
     }
@@ -80,6 +77,7 @@ export default async function handler(req, res) {
           videos.push({
             id: att.video.id,
             owner_id: att.video.owner_id,
+            access_key: att.video.access_key || null,
             title: att.video.title,
             page_url: `https://vk.com/video${att.video.owner_id}_${att.video.id}`
           });
@@ -106,19 +104,24 @@ export default async function handler(req, res) {
 
     });
 
-
     if (videos.length > 0) {
 
       const videoIds = videos
-        .map(v => `${v.owner_id}_${v.id}`)
+        .map(v =>
+          v.access_key
+            ? `${v.owner_id}_${v.id}_${v.access_key}`
+            : `${v.owner_id}_${v.id}`
+        )
         .join(",");
 
-      const videoUrl = `https://api.vk.com/method/video.get?videos=${videoIds}&access_token=${process.env.VK_TOKEN}&v=5.199`;
+      const videoUrl =
+        `https://api.vk.com/method/video.get?videos=${videoIds}` +
+        `&access_token=${process.env.VK_TOKEN}&v=5.199`;
 
       const videoResponse = await fetch(videoUrl);
       const videoData = await videoResponse.json();
 
-      if (videoData.response?.items) {
+      if (videoData.response?.items?.length) {
 
         videos.forEach(video => {
 
@@ -127,7 +130,8 @@ export default async function handler(req, res) {
           );
 
           if (full) {
-            video.player = full.player || null; // iframe ссылка
+
+            video.player = full.player || null;
             video.duration = full.duration || null;
             video.width = full.width || null;
             video.height = full.height || null;
@@ -140,11 +144,20 @@ export default async function handler(req, res) {
             } else {
               video.preview = null;
             }
+
           }
 
         });
 
       }
+
+      videos.forEach(video => {
+        if (!video.player) {
+          video.player =
+            `https://vk.com/video_ext.php?oid=${video.owner_id}` +
+            `&id=${video.id}&hd=2`;
+        }
+      });
 
     }
 
