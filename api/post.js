@@ -51,7 +51,7 @@ export default async function handler(req, res) {
 
     const post = data.response.items[0];
 
-    // --- Обработка вложений ---
+    // --- Вложения ---
     const photos = [];
     const videos = [];
     const documents = [];
@@ -117,6 +117,12 @@ export default async function handler(req, res) {
 
       date_unix: post.date,
       date_formatted: formattedDate,
+
+      hash: post.hash || null,
+
+      embed_url: post.hash
+        ? `https://vk.com/widget_post.php?owner_id=${post.owner_id}&post_id=${post.id}&hash=${post.hash}`
+        : null,
 
       photos,
       videos,
