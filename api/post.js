@@ -1,34 +1,20 @@
 export default async function handler(req, res) {
   const { owner_id, post_id } = req.query;
 
-  if (!owner_id || !post_id) {
-    return res.status(400).json({ error: "Missing owner_id or post_id" });
-  }
-
   try {
     const url = `https://api.vk.com/method/wall.getById?posts=${owner_id}_${post_id}&access_token=${process.env.VK_TOKEN}&v=5.199`;
 
     const vkResponse = await fetch(url);
     const data = await vkResponse.json();
 
-    if (data.error) {
-      return res.status(400).json({
-        vk_error: data.error
-      });
-    }
-
-    const post = data.response[0];
-
-    res.status(200).json({
-      date: post.date,
-      hash: post.hash,
-      embed: `https://vk.com/widget_post.php?owner_id=${owner_id}&post_id=${post_id}&hash=${post.hash}`
+    return res.status(200).json({
+      debug: true,
+      vk_raw_response: data
     });
 
   } catch (err) {
-    res.status(500).json({
-      error: "Server error",
-      details: err.message
+    return res.status(500).json({
+      error: err.message
     });
   }
 }
