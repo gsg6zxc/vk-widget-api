@@ -5,7 +5,6 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  // Обработка preflight запроса
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
@@ -31,14 +30,12 @@ export default async function handler(req, res) {
 
     if (!vkResponse.ok) {
       return res.status(vkResponse.status).json({
-        error: "VK API request failed",
-        status: vkResponse.status
+        error: "VK API request failed"
       });
     }
 
     const data = await vkResponse.json();
 
-    // Если VK вернул ошибку
     if (data.error) {
       return res.status(400).json({
         error: "VK API error",
@@ -54,16 +51,77 @@ export default async function handler(req, res) {
 
     const post = data.response.items[0];
 
+    // --- Обработка вложений ---
+    const photos = [];
+    const videos = [];
+    const documents = [];
+    const links = [];
+
+    (post.attachments || []).forEach(att => {
+
+      switch (att.type) {
+
+        case "photo":
+          if (att.photo?.sizes?.length) {
+            const maxSize = att.photo.sizes.reduce((prev, current) =>
+              current.width > prev.width ? current : prev
+            );
+
+            photos.push({
+              id: att.photo.id,
+              url: maxSize.url,
+              width: maxSize.width,
+              height: maxSize.height
+            });
+          }
+          break;
+
+        case "video":
+          videos.push({
+            id: att.video.id,
+            owner_id: att.video.owner_id,
+            title: att.video.title,
+            url: `https://vk.com/video${att.video.owner_id}_${att.video.id}`
+          });
+          break;
+
+        case "doc":
+          documents.push({
+            id: att.doc.id,
+            title: att.doc.title,
+            url: att.doc.url,
+            ext: att.doc.ext,
+            size: att.doc.size
+          });
+          break;
+
+        case "link":
+          links.push({
+            title: att.link.title,
+            url: att.link.url,
+            description: att.link.description || null
+          });
+          break;
+      }
+
+    });
+
     const formattedDate = new Date(post.date * 1000)
       .toLocaleString("ru-RU");
 
     return res.status(200).json({
       owner_id: post.owner_id,
       post_id: post.id,
+
+      text: post.text || "",
+
       date_unix: post.date,
       date_formatted: formattedDate,
-      hash: post.hash || null,
-      embed_url: `https://vk.com/widget_post.php?owner_id=${post.owner_id}&post_id=${post.id}&hash=${post.hash}`
+
+      photos,
+      videos,
+      documents,
+      links
     });
 
   } catch (err) {
