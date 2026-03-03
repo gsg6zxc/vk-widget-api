@@ -6,14 +6,15 @@ export default async function handler(req, res) {
   }
 
   try {
-    const vkResponse = await fetch(
-      `https://api.vk.com/method/wall.getById?posts=${owner_id}_${post_id}&access_token=${process.env.VK_TOKEN}&v=5.199`
-    );
+    const url = `https://api.vk.com/method/wall.getById?posts=${owner_id}_${post_id}&access_token=${process.env.VK_TOKEN}&v=5.199`;
 
+    const vkResponse = await fetch(url);
     const data = await vkResponse.json();
 
-    if (!data.response) {
-      return res.status(400).json({ error: data.error });
+    if (data.error) {
+      return res.status(400).json({
+        vk_error: data.error
+      });
     }
 
     const post = data.response[0];
@@ -25,6 +26,9 @@ export default async function handler(req, res) {
     });
 
   } catch (err) {
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({
+      error: "Server error",
+      details: err.message
+    });
   }
 }
