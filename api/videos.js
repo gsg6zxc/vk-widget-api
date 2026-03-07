@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-  const token = process.env.VK_TOKEN; 
+  const token = process.env.VK_ACCESS_TOKEN; 
 
 
   const url = `https://api.vk.com/method/account.getAppPermissions?access_token=${token}&v=5.131`;
