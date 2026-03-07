@@ -2,7 +2,7 @@
 import fetch from "node-fetch";
 
 export default async function handler(req, res) {
-  const GROUP_ID = "-236188200"; // замените на ID вашего сообщества
+  const GROUP_ID = "236188200"; // замените на ID вашего сообщества
   const ACCESS_TOKEN = process.env.VK_TOKEN_GROUP; // токен VK с правами photos
 
   try {
