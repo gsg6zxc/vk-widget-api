@@ -1,9 +1,13 @@
 export default async function handler(req, res) {
 
   const token = process.env.VK_TOKEN
-  const owner_id = req.query.owner_id || "-123456"
+  const videos = req.query.videos
 
-  const url = `https://api.vk.com/method/video.get?owner_id=${owner_id}&v=5.131&access_token=${token}`
+  if (!videos) {
+    return res.status(400).json({error: "videos parameter required"})
+  }
+
+  const url = `https://api.vk.com/method/video.get?videos=${videos}&access_token=${token}&v=5.131`
 
   const response = await fetch(url)
   const data = await response.json()
