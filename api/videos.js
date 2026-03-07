@@ -1,23 +1,36 @@
 export default async function handler(req, res) {
-  const token = process.env.VK_ACCESS_TOKEN; 
 
+  const token = process.env.VK_TOKEN
 
-  const url = `https://api.vk.com/method/account.getAppPermissions?access_token=${token}&v=5.131`;
+  const video = req.query.video
+
+  if (!video) {
+    res.status(400).json({ error: "video parameter required" })
+    return
+  }
+
+  const url = `https://api.vk.com/method/video.get?videos=${video}&access_token=${token}&v=5.199`
 
   try {
 
-    const response = await fetch(url);
-    const data = await response.json();
+    const response = await fetch(url)
+    const data = await response.json()
 
+    const item = data.response.items[0]
 
-    if (data.error) {
-      return res.status(400).json({ error: data.error });
+    const result = {
+      title: item.title,
+      embed: item.player,
+      preview: item.image?.[0]?.url || null,
+      vk_link: `https://vk.com/video${video}`
     }
 
+    res.status(200).json(result)
 
-    return res.status(200).json(data);
-  } catch (error) {
+  } catch (err) {
 
-    return res.status(500).json({ error: 'Ошибка при запросе разрешений' });
+    res.status(500).json({ error: "VK request failed" })
+
   }
+
 }
