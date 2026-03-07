@@ -1,16 +1,13 @@
-export default async function handler(req, res) {
+const token = 'VK_TOKEN';
+const url = `https://api.vk.com/method/account.getAppPermissions?access_token=${token}&v=5.131`;
 
-  const token = process.env.VK_TOKEN
-  const videos = req.query.videos
-
-  if (!videos) {
-    return res.status(400).json({error: "videos parameter required"})
-  }
-
-  const url = `https://api.vk.com/method/video.get?videos=${videos}&access_token=${token}&v=5.131`
-
-  const response = await fetch(url)
-  const data = await response.json()
-
-  res.status(200).json(data)
-}
+fetch(url)
+  .then(response => response.json())
+  .then(data => {
+    if (data.response) {
+      console.log('Разрешения токена:', data.response);
+    } else {
+      console.error('Ошибка:', data.error);
+    }
+  })
+  .catch(error => console.error('Ошибка запроса:', error));
