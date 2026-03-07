@@ -1,36 +1,37 @@
+import axios from "axios";
+
 export default async function handler(req, res) {
+  const { url } = req.query;
 
-  const token = process.env.VK_TOKEN
-
-  const video = req.query.video
-
-  if (!video) {
-    res.status(400).json({ error: "video parameter required" })
-    return
+  if (!url) {
+    return res.status(400).json({ error: "No video URL provided" });
   }
-
-  const url = `https://api.vk.com/method/video.get?videos=${video}&access_token=${token}&v=5.199`
 
   try {
+    const response = await axios.get(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      }
+    });
 
-    const response = await fetch(url)
-    const data = await response.json()
+    const html = response.data;
 
-    const item = data.response.items[0]
+    const match = html.match(/playerParams\s*=\s*(\{.+?\});/s);
 
-    const result = {
-      title: item.title,
-      embed: item.player,
-      preview: item.image?.[0]?.url || null,
-      vk_link: `https://vk.com/video${video}`
+    if (!match) {
+      return res.status(404).json({ error: "Video data not found" });
     }
 
-    res.status(200).json(result)
+    const player = JSON.parse(match[1]).player.params[0];
+
+    res.json({
+      title: player.md_title,
+      preview: player.jpg,
+      embed: player.player
+    });
 
   } catch (err) {
-
-    res.status(500).json({ error: "VK request failed" })
-
+    res.status(500).json({ error: "Failed to fetch video" });
   }
-
 }
