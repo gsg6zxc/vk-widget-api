@@ -1,5 +1,6 @@
 export default async function handler(req, res) {
 
+  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -12,11 +13,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { owner_id, video_id, access_key } = req.query;
+  const { owner_id, post_id } = req.query;
 
-  if (!owner_id || !video_id) {
+  if (!owner_id || !post_id) {
     return res.status(400).json({
-      error: "Missing owner_id or video_id"
+      error: "Missing owner_id or post_id"
     });
   }
 
@@ -28,65 +29,110 @@ export default async function handler(req, res) {
 
   try {
 
-    const videoParam = access_key
-      ? `${owner_id}_${video_id}_${access_key}`
-      : `${owner_id}_${video_id}`;
-
-    const url =
-      `https://api.vk.com/method/video.get?videos=${videoParam}` +
+    // Получаем пост
+    const wallUrl =
+      `https://api.vk.com/method/wall.getById?posts=${owner_id}_${post_id}` +
       `&access_token=${process.env.VK_TOKEN}&v=5.199`;
 
-    const response = await fetch(url);
-    const data = await response.json();
+    const wallResponse = await fetch(wallUrl);
+    const wallData = await wallResponse.json();
 
-    if (data.error) {
+    if (wallData.error) {
       return res.status(400).json({
         error: "VK API error",
-        details: data.error.error_msg
+        details: wallData.error.error_msg
       });
     }
 
-    if (!data.response?.items?.length) {
+    if (!wallData.response?.items?.length) {
       return res.status(404).json({
-        error: "Video not found"
+        error: "Post not found"
       });
     }
 
-    const video = data.response.items[0];
+    const post = wallData.response.items[0];
 
-    let preview = null;
+    const videos = [];
 
-    if (video.image?.length) {
-      const max = video.image.reduce((prev, current) =>
-        current.width > prev.width ? current : prev
-      );
-      preview = max.url;
+    (post.attachments || []).forEach(att => {
+
+      if (att.type === "video") {
+
+        videos.push({
+          id: att.video.id,
+          owner_id: att.video.owner_id,
+          access_key: att.video.access_key || null,
+          title: att.video.title
+        });
+
+      }
+
+    });
+
+    if (!videos.length) {
+      return res.status(404).json({
+        error: "No videos in post"
+      });
     }
 
-    const player =
-      video.player ||
-      `https://vk.com/video_ext.php?oid=${video.owner_id}&id=${video.id}&hd=2`;
+    // получаем полную инфу о видео
+    const videoIds = videos
+      .map(v =>
+        v.access_key
+          ? `${v.owner_id}_${v.id}_${v.access_key}`
+          : `${v.owner_id}_${v.id}`
+      )
+      .join(",");
+
+    const videoUrl =
+      `https://api.vk.com/method/video.get?videos=${videoIds}` +
+      `&access_token=${process.env.VK_TOKEN}&v=5.199`;
+
+    const videoResponse = await fetch(videoUrl);
+    const videoData = await videoResponse.json();
+
+    if (videoData.response?.items?.length) {
+
+      videos.forEach(video => {
+
+        const full = videoData.response.items.find(
+          v => v.id === video.id && v.owner_id === video.owner_id
+        );
+
+        if (full) {
+
+          video.description = full.description || "";
+          video.duration = full.duration || null;
+          video.views = full.views || 0;
+
+          video.player =
+            full.player ||
+            `https://vk.com/video_ext.php?oid=${video.owner_id}&id=${video.id}&hd=2`;
+
+          if (full.image?.length) {
+            const maxPreview = full.image.reduce((prev, current) =>
+              current.width > prev.width ? current : prev
+            );
+            video.preview = maxPreview.url;
+          } else {
+            video.preview = null;
+          }
+
+        }
+
+      });
+
+    }
 
     return res.status(200).json({
 
-      id: video.id,
-      owner_id: video.owner_id,
+      post: {
+        owner_id: post.owner_id,
+        post_id: post.id,
+        date: post.date
+      },
 
-      title: video.title,
-      description: video.description || "",
-
-      duration: video.duration,
-
-      width: video.width,
-      height: video.height,
-
-      preview,
-      player,
-
-      views: video.views,
-
-      date_unix: video.date,
-      date_formatted: new Date(video.date * 1000).toLocaleString("ru-RU")
+      videos
 
     });
 
