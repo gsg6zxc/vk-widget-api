@@ -18,7 +18,7 @@ export default async function handler(req, res) {
 
   const VK_TOKEN = process.env.VK_TOKEN;
 
-  const url =
+  const photosUrl =
     `https://api.vk.com/method/photos.get` +
     `?owner_id=${owner}` +
     `&album_id=${album}` +
@@ -27,12 +27,26 @@ export default async function handler(req, res) {
     `&access_token=${VK_TOKEN}` +
     `&v=5.131`;
 
+  const albumUrl =
+    `https://api.vk.com/method/photos.getAlbums` +
+    `?owner_id=${owner}` +
+    `&album_ids=${album}` +
+    `&access_token=${VK_TOKEN}` +
+    `&v=5.131`;
+
   try {
 
-    const response = await fetch(url);
-    const data = await response.json();
+    const [photosResponse, albumResponse] = await Promise.all([
+      fetch(photosUrl),
+      fetch(albumUrl)
+    ]);
 
-    const photos = data.response.items.map(item => {
+    const photosData = await photosResponse.json();
+    const albumData = await albumResponse.json();
+
+    const albumInfo = albumData.response.items[0];
+
+    const photos = photosData.response.items.map(item => {
 
       const largest = item.sizes[item.sizes.length - 1];
 
@@ -46,7 +60,9 @@ export default async function handler(req, res) {
     });
 
     res.status(200).json({
-      count: data.response.count,
+      title: albumInfo.title,
+      description: albumInfo.description,
+      count: photosData.response.count,
       photos
     });
 
