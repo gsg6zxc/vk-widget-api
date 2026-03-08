@@ -25,7 +25,10 @@ export default async function handler(req, res) {
 
   try {
 
-    // получаем пост
+    // =========================
+    // Получаем пост
+    // =========================
+
     const wallUrl =
       `https://api.vk.com/method/wall.getById?posts=${owner_id}_${post_id}` +
       `&access_token=${process.env.VK_TOKEN}&v=5.199`;
@@ -50,7 +53,10 @@ export default async function handler(req, res) {
 
     const videos = [];
 
-    // ищем только видео
+    // =========================
+    // Извлекаем видео
+    // =========================
+
     (post.attachments || []).forEach(att => {
 
       if (att.type === "video") {
@@ -67,84 +73,121 @@ export default async function handler(req, res) {
 
     });
 
-    // если есть видео — получаем полную инфу
-    if (videos.length > 0) {
+    if (!videos.length) {
+      return res.status(404).json({
+        error: "No videos in post"
+      });
+    }
 
-      const videoIds = videos
-        .map(v =>
-          v.access_key
-            ? `${v.owner_id}_${v.id}_${v.access_key}`
-            : `${v.owner_id}_${v.id}`
-        )
-        .join(",");
+    // =========================
+    // Получаем полную инфу о видео
+    // =========================
 
-      const videoUrl =
-        `https://api.vk.com/method/video.get?videos=${videoIds}` +
-        `&access_token=${process.env.VK_TOKEN}&v=5.199`;
+    const videoIds = videos
+      .map(v =>
+        v.access_key
+          ? `${v.owner_id}_${v.id}_${v.access_key}`
+          : `${v.owner_id}_${v.id}`
+      )
+      .join(",");
 
-      const videoResponse = await fetch(videoUrl);
-      const videoData = await videoResponse.json();
+    const videoUrl =
+      `https://api.vk.com/method/video.get?videos=${videoIds}` +
+      `&access_token=${process.env.VK_TOKEN}&v=5.199`;
 
-      if (videoData.response?.items?.length) {
+    const videoResponse = await fetch(videoUrl);
+    const videoData = await videoResponse.json();
 
-        videos.forEach(video => {
+    if (videoData.error) {
+      return res.status(400).json({
+        error: "VK API error (video.get)",
+        details: videoData.error.error_msg
+      });
+    }
 
-          const full = videoData.response.items.find(
-            v => v.id === video.id && v.owner_id === video.owner_id
+    if (videoData.response?.items?.length) {
+
+      videos.forEach(video => {
+
+        const full = videoData.response.items.find(
+          v => v.id === video.id && v.owner_id === video.owner_id
+        );
+
+        if (!full) return;
+
+        video.description = full.description || "";
+        video.duration = full.duration || null;
+        video.views = full.views || 0;
+
+        video.width = full.width || null;
+        video.height = full.height || null;
+
+        video.player =
+          full.player ||
+          `https://vk.com/video_ext.php?oid=${video.owner_id}&id=${video.id}&hd=2`;
+
+        // =========================
+        // Получаем preview
+        // =========================
+
+        let previews = [];
+
+        if (Array.isArray(full.image)) {
+          previews = previews.concat(full.image);
+        }
+
+        if (Array.isArray(full.first_frame)) {
+          previews = previews.concat(full.first_frame);
+        }
+
+        if (previews.length) {
+
+          const maxPreview = previews.reduce((prev, current) =>
+            current.width > prev.width ? current : prev
           );
 
-          if (full) {
+          video.preview = maxPreview.url;
+          video.preview_width = maxPreview.width;
+          video.preview_height = maxPreview.height;
 
-            video.description = full.description || "";
-            video.duration = full.duration || null;
-            video.views = full.views || 0;
+        } else {
 
-            video.player = full.player || null;
-            video.width = full.width || null;
-            video.height = full.height || null;
+          video.preview = null;
 
-            if (full.image?.length) {
-              const maxPreview = full.image.reduce((prev, current) =>
-                current.width > prev.width ? current : prev
-              );
-              video.preview = maxPreview.url;
-            } else {
-              video.preview = null;
-            }
-
-          }
-
-        });
-
-      }
-
-      // fallback player
-      videos.forEach(video => {
-        if (!video.player) {
-          video.player =
-            `https://vk.com/video_ext.php?oid=${video.owner_id}` +
-            `&id=${video.id}&hd=2`;
         }
+
       });
 
     }
+
+    // =========================
+    // Ответ API
+    // =========================
 
     const formattedDate = new Date(post.date * 1000)
       .toLocaleString("ru-RU");
 
     return res.status(200).json({
+
       owner_id: post.owner_id,
       post_id: post.id,
+
       text: post.text || "",
+
       date_unix: post.date,
       date_formatted: formattedDate,
+
       videos
+
     });
 
   } catch (err) {
+
     return res.status(500).json({
       error: "Server error",
       details: err.message
     });
+
   }
+
 }
