@@ -8,19 +8,19 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const { owner, album, limit = 50 } = req.query;
+  const { videos } = req.query;
 
-  if (!owner) {
-    return res.status(400).json({ error: "owner is required" });
+  if (!videos) {
+    return res.status(400).json({
+      error: "videos parameter is required (format: owner_id_video_id)"
+    });
   }
 
   const VK_TOKEN = process.env.VK_TOKEN;
 
   const url =
     `https://api.vk.com/method/video.get` +
-    `?owner_id=${owner}` +
-    `&album_id=${album}` +
-    `&count=${limit}` +
+    `?videos=${videos}` +
     `&access_token=${VK_TOKEN}` +
     `&v=5.131`;
 
@@ -29,34 +29,35 @@ export default async function handler(req, res) {
     const response = await fetch(url);
     const data = await response.json();
 
-    if (!data.response) {
-      return res.status(400).json(data);
+    if (!data.response || !data.response.items) {
+      return res.status(500).json({
+        error: "Invalid VK response",
+        raw: data
+      });
     }
 
-    const videos = data.response.items.map(v => {
+    const videosData = data.response.items.map(video => {
 
-      const thumb =
-        v.image?.[v.image.length - 1]?.url ||
-        v.first_frame?.[0]?.url ||
-        "";
+      const thumb = video.image?.[video.image.length - 1]?.url || null;
 
       return {
-        id: v.id,
-        owner: v.owner_id,
-        title: v.title,
-        player: v.player,
+        id: video.id,
+        owner_id: video.owner_id,
+        title: video.title,
+        description: video.description,
+        duration: video.duration,
         thumb: thumb,
-        duration: v.duration
+        player: video.player
       };
 
     });
 
     res.status(200).json({
       count: data.response.count,
-      videos
+      videos: videosData
     });
 
-  } catch (e) {
+  } catch (error) {
 
     res.status(500).json({
       error: "VK request failed"
