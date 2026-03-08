@@ -12,55 +12,58 @@ export default async function handler(req, res) {
 
   if (!videos) {
     return res.status(400).json({
-      error: "videos parameter is required (format: owner_id_video_id)"
+      error: "videos parameter required (ownerid_videoid or ownerid_videoid_accesskey)"
     });
   }
 
-  const VK_TOKEN = process.env.VK_TOKEN;
-
-  const url =
-    `https://api.vk.com/method/video.get` +
-    `?videos=${videos}` +
-    `&access_token=${VK_TOKEN}` +
-    `&v=5.131`;
-
   try {
+
+    const url =
+      `https://api.vk.com/method/video.get` +
+      `?videos=${videos}` +
+      `&access_token=${process.env.VK_TOKEN}` +
+      `&v=5.199`;
 
     const response = await fetch(url);
     const data = await response.json();
 
-    if (!data.response || !data.response.items) {
-      return res.status(500).json({
-        error: "Invalid VK response",
-        raw: data
-      });
+    if (data.error) {
+      return res.status(400).json(data);
     }
 
-    const videosData = data.response.items.map(video => {
+    const videosData = data.response.items.map(v => {
 
-      const thumb = video.image?.[video.image.length - 1]?.url || null;
+      let preview = null;
+
+      if (v.image?.length) {
+        const max = v.image.reduce((p, c) =>
+          c.width > p.width ? c : p
+        );
+        preview = max.url;
+      }
 
       return {
-        id: video.id,
-        owner_id: video.owner_id,
-        title: video.title,
-        description: video.description,
-        duration: video.duration,
-        thumb: thumb,
-        player: video.player
+        id: v.id,
+        owner_id: v.owner_id,
+        title: v.title,
+        description: v.description || "",
+        duration: v.duration,
+        player: v.player || `https://vk.com/video_ext.php?oid=${v.owner_id}&id=${v.id}&hd=2`,
+        preview
       };
 
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       count: data.response.count,
       videos: videosData
     });
 
-  } catch (error) {
+  } catch (err) {
 
-    res.status(500).json({
-      error: "VK request failed"
+    return res.status(500).json({
+      error: "VK request failed",
+      details: err.message
     });
 
   }
